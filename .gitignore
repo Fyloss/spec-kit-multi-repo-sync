@@ -1,0 +1,14 @@
+# Tooling artifacts — not part of the published extension
+
+# Serena MCP (auto-generated project index/config)
+.serena/
+
+# Claude Code local settings
+.claude/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

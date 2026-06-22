@@ -1,0 +1,117 @@
+name: Lint, Validate & Test
+
+# Quality gates for every pull request (and pushes to main).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck (bash scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure shellcheck is available
+        run: shellcheck --version || (sudo apt-get update && sudo apt-get install -y shellcheck)
+      - name: Lint bash scripts (follow sourced files)
+        run: shellcheck -x scripts/bash/*.sh tests/test-bash.sh
+
+  powershell-lint:
+    name: PSScriptAnalyzer (powershell scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -ErrorAction Stop
+          $findings = Invoke-ScriptAnalyzer -Path scripts/powershell -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          if ($findings) {
+            $findings | Format-Table RuleName, Severity, Line, ScriptName, Message -AutoSize -Wrap
+            throw "PSScriptAnalyzer reported $($findings.Count) issue(s)."
+          }
+          Write-Host "PSScriptAnalyzer: clean."
+
+  manifest:
+    name: Validate extension.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+      - name: Validate manifest schema
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          with open("extension.yml") as fh:
+              m = yaml.safe_load(fh)
+          errors = []
+          if m.get("schema_version") != "1.0":
+              errors.append(f'schema_version must be "1.0" (got {m.get("schema_version")!r})')
+          ext = m.get("extension") or {}
+          for key in ("id", "name", "version", "description", "author", "repository", "license"):
+              if not ext.get(key):
+                  errors.append(f"extension.{key} is required")
+          if ext.get("id") and ext["id"] != "multi-repo-sync":
+              errors.append(f'extension.id should be "multi-repo-sync" (got {ext["id"]!r})')
+          provides = (m.get("provides") or {}).get("commands") or []
+          names = [c.get("name", "") for c in provides]
+          for n in names:
+              if not n.startswith("speckit.multi-repo-sync."):
+                  errors.append(f"command {n!r} must be namespaced speckit.multi-repo-sync.*")
+          # Referenced command files must exist on disk.
+          import os
+          for c in provides:
+              f = c.get("file")
+              if f and not os.path.isfile(f):
+                  errors.append(f"command file not found: {f}")
+          hooks = m.get("hooks") or {}
+          if not hooks:
+              errors.append("at least one hook is expected (after_plan / after_tasks)")
+          if errors:
+              print("Manifest validation FAILED:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+          print(f"Manifest OK: {ext['id']} v{ext['version']} | "
+                f"commands={names} | hooks={list(hooks)}")
+          PY
+
+  test-bash:
+    name: Bash tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run bash test suite
+        shell: bash
+        run: bash tests/test-bash.sh
+
+  test-powershell:
+    name: PowerShell tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run PowerShell test suite
+        shell: pwsh
+        run: pwsh -NoProfile -File tests/test-powershell.ps1

@@ -1,0 +1,44 @@
+# Multi-Repo Branch Sync — extension-local configuration (optional)
+#
+# This file is installed to:
+#   .specify/extensions/multi-repo-sync/multi-repo-sync-config.yml
+#
+# It is OPTIONAL. The extension reads its configuration with this precedence
+# (highest wins):
+#
+#   1. This file (extension-local overrides)
+#   2. .specify/init-options.json  ->  multi_repo_branching.{...}
+#        (drop-in compatible with spec-kit-preset-multi-repo-branching)
+#   3. Built-in defaults: type=auto, scan_depth=2
+#
+# Most users do NOT need this file — configure the preset-compatible key in
+# .specify/init-options.json instead. Use this file only to override.
+#
+# Every key below ships COMMENTED OUT: this file has the highest precedence, so
+# an active value here would silently override whatever the user configured in
+# init-options.json. Uncomment only the keys you actually want to force.
+
+# Detection mode: auto | independent | submodule
+#   auto        -> submodule if .gitmodules exists, else independent (default)
+#   submodule   -> read submodule paths from .gitmodules (no filesystem scan)
+#   independent -> scan for nested directories containing .git
+# type: auto
+
+# How many directory levels deep to scan for nested independent repos.
+# (Ignored in submodule mode.) Default: 2
+# scan_depth: 2
+
+# Also check out the branch inside each sub-repository after creating it,
+# mirroring the preset's `git checkout -b`. Best-effort: requires a clean working
+# tree, otherwise the branch is created but not switched (the dirty sub-repo is
+# reported, never aborted). Set to false for create-only behavior. Default: true
+# switch: true
+
+# Branch names that must NEVER be fanned out (propagating "main" everywhere is
+# pointless and risky). Space- or comma-separated. Default: main master
+# skip_branches: main master
+
+# Path fragments to exclude from independent-mode detection, in addition to
+# anything already covered by .gitignore (which is always respected). These
+# ADD to any excludes from init-options.json. Comma- or space-separated.
+# exclude: vendor third_party
