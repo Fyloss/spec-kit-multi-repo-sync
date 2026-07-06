@@ -1,0 +1,7 @@
+{
+  "multi_repo_branching": {
+    "type": "submodule",
+    "switch": false,
+    "skip_branches": ["main", "master"]
+  }
+}

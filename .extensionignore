@@ -1,0 +1,24 @@
+# .extensionignore — files excluded from the installed extension copy
+
+# Continuous integration
+.github/
+
+# Automated tests (dev-only)
+tests/
+
+# Linter configuration (dev-only)
+PSScriptAnalyzerSettings.psd1
+
+# Repo-level Git metadata
+.gitignore
+
+# Local tooling artifacts (untracked, but copied by install if present)
+.serena/
+.claude/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

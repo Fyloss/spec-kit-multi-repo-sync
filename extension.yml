@@ -1,0 +1,73 @@
+schema_version: "1.0"
+
+extension:
+  id: multi-repo-sync
+  name: "Multi-Repo Branch Sync"
+  description: "Creates the active feature branch in the affected nested sub-repositories and git submodules via plan/tasks hooks, without overriding core commands"
+  version: "1.0.0"
+  author: "Fyloss"
+  repository: https://github.com/fyloss/spec-kit-multi-repo-sync
+  license: MIT
+
+# Free-form tags for discovery in the community catalog.
+# NOTE: Spec Kit's manifest schema has no `category` / `effect` fields (those
+# concepts belong to presets, not extensions). The equivalent intent is encoded
+# here as tags: this is a *process* extension with a *read-write* effect
+# (it creates branches in sub-repositories).
+tags:
+  - git
+  - branching
+  - multi-repo
+  - monorepo
+  - submodules
+  - workflow
+
+requires:
+  # after_tasks/after_implement hook wiring landed early; the after_specify /
+  # after_plan template wiring landed later. >=0.2.0 is the conservative floor
+  # for hook execution; newer cores fire after_plan reliably (see README).
+  speckit_version: ">=0.2.0"
+  tools:
+    - name: git
+      required: true
+
+provides:
+  commands:
+    - name: speckit.multi-repo-sync.analyze
+      file: commands/speckit.multi-repo-sync.analyze.md
+      description: "Discover sub-repositories and record which ones the feature affects in plan.md (Affected Repositories table)"
+    - name: speckit.multi-repo-sync.sync
+      file: commands/speckit.multi-repo-sync.sync.md
+      description: "Create the feature branch in the affected sub-repositories recorded in plan.md (idempotent; supports --dry-run)"
+    - name: speckit.multi-repo-sync.status
+      file: commands/speckit.multi-repo-sync.status.md
+      description: "Report detected sub-repositories / submodules and their per-target branch state (read-only)"
+
+  config:
+    - name: "multi-repo-sync-config.yml"
+      template: "config-template.yml"
+      description: "Optional extension-local overrides (precedence over .specify/init-options.json)"
+      required: false
+
+# Hooks integrate the two-phase flow into the native lifecycle WITHOUT replacing
+# any core command (mirroring the preset, which acts in plan then tasks). They are
+# namespaced and live in this extension's files, so a `specify upgrade` of core
+# plan/tasks never touches them.
+#
+# `optional: false` => auto-executed (no interactive prompt — hooks run
+# non-interactively).
+#   after_plan  -> analyze: discover sub-repositories and record the ones the
+#                  feature affects in plan.md's "Affected Repositories" table.
+#   after_tasks -> sync:    create the feature branch in those affected repos
+#                  (idempotent: later runs report "exists" and do nothing).
+hooks:
+  after_plan:
+    command: speckit.multi-repo-sync.analyze
+    optional: false
+    description: "Discover affected sub-repositories and record them in plan.md after planning"
+    condition: null
+  after_tasks:
+    command: speckit.multi-repo-sync.sync
+    optional: false
+    description: "Create the feature branch in the affected sub-repositories after task generation (idempotent)"
+    condition: null

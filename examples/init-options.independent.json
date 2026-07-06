@@ -1,0 +1,9 @@
+{
+  "multi_repo_branching": {
+    "type": "independent",
+    "scan_depth": 2,
+    "switch": false,
+    "skip_branches": ["main", "master", "develop"],
+    "exclude": ["vendor", "third_party"]
+  }
+}
