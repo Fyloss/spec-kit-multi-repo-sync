@@ -3,10 +3,11 @@ schema_version: "1.0"
 extension:
   id: multi-repo-sync
   name: "Multi-Repo Branch Sync"
-  description: "Creates the active feature branch in the affected nested sub-repositories and git submodules via plan/tasks hooks, without overriding core commands"
+  description: "Creates the feature branch in affected sub-repositories and git submodules via plan/tasks hooks"
   version: "1.0.0"
   author: "Fyloss"
   repository: https://github.com/fyloss/spec-kit-multi-repo-sync
+  homepage: https://github.com/fyloss/spec-kit-multi-repo-sync
   license: MIT
 
 # Free-form tags for discovery in the community catalog.
@@ -18,7 +19,6 @@ tags:
   - git
   - branching
   - multi-repo
-  - monorepo
   - submodules
   - workflow
 
