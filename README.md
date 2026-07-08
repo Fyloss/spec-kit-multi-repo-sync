@@ -45,6 +45,8 @@ and this extension never touches core's.
 
 ## How it works
 
+![How it works](docs/assets/how-it-works.png)
+
 This mirrors the [`spec-kit-preset-multi-repo-branching`][preset] flow (discover
 in *plan*, branch in *tasks*), but as a **hook-based extension** that survives
 `specify self upgrade` instead of overriding the core `plan`/`tasks` commands.
