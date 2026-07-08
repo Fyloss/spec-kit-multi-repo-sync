@@ -4,6 +4,13 @@ All notable changes to `spec-kit-multi-repo-sync` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Diagram illustrating the extension's flow in the README's **How it works**
+  section (`docs/assets/how-it-works.png`), optimized for the web with
+  `pngquant` (1.3MB → 267KB, same dimensions, no visible quality loss).
+
 ## [1.0.0] - 2026-07-06
 
 Initial release. The branching behaviour is aligned with the community preset
