@@ -6,26 +6,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-07-06
 
-### Security
-- **Content-filter drivers in an untrusted sub-repo can no longer execute code.**
-  The hardened git wrapper neutralized `core.hooksPath` and `core.fsmonitor` but
-  not `filter.<name>.clean/smudge/process`, which git runs on `git status`
-  (clean) and `git switch` (smudge) when armed by an in-tree `.gitattributes` —
-  a remote-code-execution path on a cloned malicious repo, reachable on the
-  default auto-`sync` path. The wrapper now enumerates every filter driver in the
-  sub-repo's local config and overrides each to a no-op (via `GIT_CONFIG_*`, so a
-  driver name containing `=` or `.` cannot dodge the override) on both Bash and
-  PowerShell. Requires git >= 2.31; also disables any legitimate sub-repo-local
-  filter (e.g. git-lfs) for the duration of these branch/switch operations.
-- **Symlink containment guard is case-sensitive off Windows (PowerShell).** The
-  outside-root check compared physical paths with `OrdinalIgnoreCase` on every
-  platform, so on a case-sensitive filesystem a `.gitmodules` path symlinked to
-  a case-variant sibling (e.g. `/home/u/PROJ/evil` vs root `/home/u/proj`) could
-  slip past the guard. Comparison is now case-insensitive on Windows only.
-- **`git check-ignore` calls pass `--` before the path** (Bash and PowerShell),
-  so an option-like path planted in a cloned `.gitmodules` (e.g. `path =
-  --stdin`, which silently consumed the remaining target list) can no longer be
-  parsed as a flag.
+Initial release. The branching behaviour is aligned with the community preset
+`spec-kit-preset-multi-repo-branching` while keeping a hook-based,
+upgrade-safe design.
+
+### Added
+- Hook-based feature-branch fan-out via `after_plan` and `after_tasks`, so the
+  behaviour integrates with native Spec Kit commands **without overriding** them
+  and survives `specify self upgrade`.
+- Two-phase flow mirroring the preset (discover in *plan*, branch in *tasks*):
+  - New `/speckit.multi-repo-sync.analyze` command, wired to the `after_plan`
+    hook, that discovers sub-repositories and records the ones the feature
+    affects in an **Affected Repositories** table inside `plan.md`.
+  - The `after_tasks` hook runs `sync`, which reads that table and branches
+    only the affected repositories (falling back to all detected when no table
+    is present).
+- Detection logic compatible with the community preset
+  `spec-kit-preset-multi-repo-branching`:
+  - `auto` mode (submodule if `.gitmodules` exists, otherwise independent).
+  - `submodule` mode (paths parsed from `.gitmodules`).
+  - `independent` mode (scan for nested `.git`, honouring `git check-ignore`).
+  - `scan_depth` limit (default `2`).
+- Configuration read from `.specify/init-options.json` under
+  `multi_repo_branching`, with an optional extension-local override file
+  (`multi-repo-sync-config.yml`).
+- Namespaced helper commands:
+  - `/speckit.multi-repo-sync.sync` — manual / hook-driven fan-out, with
+    `--dry-run` and `--switch` support.
+  - `/speckit.multi-repo-sync.status` — read-only report of targets and per-target
+    branch state.
+- `--targets <csv>` / `-Targets` flag on the sync script to restrict the run to
+  an explicit, path-safety-validated list of affected sub-repositories.
+- Automatic `git submodule update --init` of uninitialized submodules before
+  branching, mirroring the preset's submodule branch command (routed through the
+  hardened git wrapper).
+- Idempotent branch creation (existing branches are skipped).
+- Per-target failure isolation (dirty tree, unborn HEAD, missing/uninitialized
+  submodule, non-repo) — warnings are aggregated and never abort the native run.
+- Cross-platform implementation: Bash (`scripts/bash`) and PowerShell
+  (`scripts/powershell`) with equivalent behaviour.
+- `skip_branches` guard (default `main master`) to avoid pointless fan-out.
+- Test harnesses for both Bash and PowerShell covering all documented scenarios.
+
+### Changed
+- **Switching is the default** (`switch: true`), mirroring the preset's
+  `git checkout -b`: each sub-repo is created *and* switched onto the new branch
+  on a clean tree (a dirty tree still only creates the branch). Set
+  `switch: false` or pass `--no-switch` for create-only behaviour.
+- **`config-template.yml` ships all keys commented out.** The file has the
+  highest configuration precedence, so its previously active defaults
+  (`type: auto`, `scan_depth: 2`, `switch: true`, `skip_branches: main master`)
+  silently overrode the user's `init-options.json` settings when the template
+  was installed unmodified.
+- The always-zero `skipped` counter was removed from the JSON `summary` (no code
+  path ever produced a per-target `skipped` status).
+- `Select-Targets` (PowerShell) resolves the root's physical path once per run
+  instead of once per candidate target.
 
 ### Fixed
 - **PowerShell multi-target sync no longer collapses the target list.** The
@@ -88,64 +124,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shown as `<detached>` with per-target state `n/a`, instead of querying a branch
   literally named `HEAD` in each sub-repository.
 
-### Changed
-- **`config-template.yml` ships all keys commented out.** The file has the
-  highest configuration precedence, so its previously active defaults
-  (`type: auto`, `scan_depth: 2`, `switch: true`, `skip_branches: main master`)
-  silently overrode the user's `init-options.json` settings when the template
-  was installed unmodified.
-- The always-zero `skipped` counter was removed from the JSON `summary` (no code
-  path ever produced a per-target `skipped` status).
-- `Select-Targets` (PowerShell) resolves the root's physical path once per run
-  instead of once per candidate target.
-
-Align the branching behaviour with the community preset
-`spec-kit-preset-multi-repo-branching` while keeping the hook-based,
-upgrade-safe design.
-
-### Added
-- Two-phase flow mirroring the preset (discover in *plan*, branch in *tasks*):
-  - New `/speckit.multi-repo-sync.analyze` command, wired to the `after_plan`
-    hook, that discovers sub-repositories and records the ones the feature
-    affects in an **Affected Repositories** table inside `plan.md`.
-  - The `after_tasks` hook now runs `sync`, which reads that table and branches
-    only the affected repositories (falling back to all detected when no table
-    is present).
-- `--targets <csv>` / `-Targets` flag on the sync script to restrict the run to
-  an explicit, path-safety-validated list of affected sub-repositories.
-- Automatic `git submodule update --init` of uninitialized submodules before
-  branching, mirroring the preset's submodule branch command (routed through the
-  hardened git wrapper).
-
-### Changed
-- **Switching is now the default** (`switch: true`), mirroring the preset's
-  `git checkout -b`: each sub-repo is created *and* switched onto the new branch
-  on a clean tree (a dirty tree still only creates the branch). Set
-  `switch: false` or pass `--no-switch` for the previous create-only behaviour.
-
-### Added
-- Initial release.
-- Hook-based feature-branch fan-out via `after_plan` and `after_tasks`, so the
-  behaviour integrates with native Spec Kit commands **without overriding** them
-  and survives `specify self upgrade`.
-- Detection logic compatible with the community preset
-  `spec-kit-preset-multi-repo-branching`:
-  - `auto` mode (submodule if `.gitmodules` exists, otherwise independent).
-  - `submodule` mode (paths parsed from `.gitmodules`).
-  - `independent` mode (scan for nested `.git`, honouring `git check-ignore`).
-  - `scan_depth` limit (default `2`).
-- Configuration read from `.specify/init-options.json` under
-  `multi_repo_branching`, with an optional extension-local override file
-  (`multi-repo-sync-config.yml`).
-- Namespaced helper commands:
-  - `/speckit.multi-repo-sync.sync` — manual / hook-driven fan-out, with
-    `--dry-run` and `--switch` support.
-  - `/speckit.multi-repo-sync.status` — read-only report of targets and per-target
-    branch state.
-- Idempotent branch creation (existing branches are skipped).
-- Per-target failure isolation (dirty tree, unborn HEAD, missing/uninitialized
-  submodule, non-repo) — warnings are aggregated and never abort the native run.
-- Cross-platform implementation: Bash (`scripts/bash`) and PowerShell
-  (`scripts/powershell`) with equivalent behaviour.
-- `skip_branches` guard (default `main master`) to avoid pointless fan-out.
-- Test harnesses for both Bash and PowerShell covering all documented scenarios.
+### Security
+- **Content-filter drivers in an untrusted sub-repo can no longer execute code.**
+  The hardened git wrapper neutralized `core.hooksPath` and `core.fsmonitor` but
+  not `filter.<name>.clean/smudge/process`, which git runs on `git status`
+  (clean) and `git switch` (smudge) when armed by an in-tree `.gitattributes` —
+  a remote-code-execution path on a cloned malicious repo, reachable on the
+  default auto-`sync` path. The wrapper now enumerates every filter driver in the
+  sub-repo's local config and overrides each to a no-op (via `GIT_CONFIG_*`, so a
+  driver name containing `=` or `.` cannot dodge the override) on both Bash and
+  PowerShell. Requires git >= 2.31; also disables any legitimate sub-repo-local
+  filter (e.g. git-lfs) for the duration of these branch/switch operations.
+- **Symlink containment guard is case-sensitive off Windows (PowerShell).** The
+  outside-root check compared physical paths with `OrdinalIgnoreCase` on every
+  platform, so on a case-sensitive filesystem a `.gitmodules` path symlinked to
+  a case-variant sibling (e.g. `/home/u/PROJ/evil` vs root `/home/u/proj`) could
+  slip past the guard. Comparison is now case-insensitive on Windows only.
+- **`git check-ignore` calls pass `--` before the path** (Bash and PowerShell),
+  so an option-like path planted in a cloned `.gitmodules` (e.g. `path =
+  --stdin`, which silently consumed the remaining target list) can no longer be
+  parsed as a flag.
